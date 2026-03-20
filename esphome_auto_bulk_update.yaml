@@ -40,10 +40,10 @@ blueprint:
     cooldown:
       name: Cooldown After Update
       description: Minutes to wait after updates complete before the automation can trigger again.
-      default: 60
+      default: 30
       selector:
         number:
-          min: 1
+          min: 0
           max: 120
           step: 1
           mode: slider
@@ -80,10 +80,10 @@ blueprint:
     sequential_delay:
       name: Delay Between Sequential Updates
       description: Minutes to wait between each device when using sequential mode.
-      default: 5
+      default: 0
       selector:
         number:
-          min: 1
+          min: 0
           max: 10
           step: 1
           mode: slider
