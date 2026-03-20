@@ -15,6 +15,7 @@ blueprint:
     8. Sends a completion notification listing updated devices.
     9. Waits out the cooldown period before the automation can trigger again.
   domain: automation
+  source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/esphome_auto_bulk_update.yaml
   input:
     update_threshold:
       name: Device Update Threshold
