@@ -120,6 +120,8 @@ trigger:
          | list | count > update_threshold }}
   - platform: time
     at: !input time_window_start
+  - platform: time_pattern
+    hours: "/1"
 
 condition:
   - condition: time
