@@ -39,6 +39,8 @@ If this project saved you some time or you just want to say thanks, a coffee is 
  
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-%23FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/schrothdotca)
 
+---
+
 ## License
 
 [MIT](LICENSE)
