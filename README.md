@@ -16,7 +16,7 @@ unavailable-sensor notifications.
 
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fbferd%2Fhomeassistant-blueprints%2Fmain%2Fadaptive_fan_speed_control%2Fadaptive_fan_speed_control.yaml)
 
-📄 [Full documentation](adaptive_fan_speed_control/README.md) · 📣 [Community forum post](https://community.home-assistant.io/t/adaptive-fan-speed-control-based-on-temperature-and-speed-range/678152)
+📄 [Full documentation](adaptive_fan_speed_control/README.md) · 📣 [Community forum post](https://community.home-assistant.io/t/adaptive-fan-speed-control/1014995)
 
 ---
 
