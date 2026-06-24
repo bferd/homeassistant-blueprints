@@ -35,4 +35,4 @@ immediately after updates complete.
 
 ## License
 
-[Apache 2.0](LICENSE)
+[MIT](LICENSE)
