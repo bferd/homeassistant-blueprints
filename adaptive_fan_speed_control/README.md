@@ -111,3 +111,13 @@ This blueprint builds on prior work from the Home Assistant community:
 - [MickW69](https://community.home-assistant.io/u/mickw69) — original idea and code via [Multi-speed Fan Control Based on Temperature](https://community.home-assistant.io/t/multi-speed-fan-control-based-on-temperature/552322), credited by lennon101 as the basis for the original blueprint.
 
 All credit for the original concept and groundwork goes to the above. Bugs introduced in this fork are mine.
+
+---
+
+## Support
+
+If this project saved you some time or you just want to say thanks, a coffee is always appreciated!
+ 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-%23FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/schrothdotca)
+
+
