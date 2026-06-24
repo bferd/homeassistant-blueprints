@@ -40,6 +40,8 @@ blueprint:
     (anything from the last couple of years should be fine; if the
     device/select inputs fail to render, update Home Assistant Core)."
   domain: automation
+  source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/adaptive_fan_speed_control/adaptive_fan_speed_control.yaml
+  version: "1.0.0"
   input:
     sensor_entities:
       name: 🌡 Sensors or Thermostat(s)
