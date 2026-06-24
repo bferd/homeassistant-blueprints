@@ -106,6 +106,16 @@ re-triggering immediately after updates complete.
 | v1.1.0 | 2026-03-20 | Removed optional second notification device (caused errors when left blank) |
 | v1.0.0 | 2026-03-20 | Initial release |
 
+---
+
+## Support
+
+If this project saved you some time or you just want to say thanks, a coffee is always appreciated!
+ 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-%23FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/schrothdotca)
+
+---
+
 ## Credits
 
 Blueprint by [bferd](https://github.com/bferd).
