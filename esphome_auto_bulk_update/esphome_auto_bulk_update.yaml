@@ -18,6 +18,7 @@ blueprint:
     9. Waits out the cooldown period before the automation can trigger again.
   domain: automation
   source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/esphome_auto_bulk_update/esphome_auto_bulk_update.yaml
+  version: "1.2.0"
   input:
     update_threshold:
       name: Device Update Threshold
