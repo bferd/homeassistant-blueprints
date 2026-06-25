@@ -1,3 +1,7 @@
+# Adaptive Fan Speed Control
+# Version: 1.0.0
+# https://github.com/bferd/homeassistant-blueprints
+
 blueprint:
   name: Adaptive Fan Speed Control
   description: "Adaptive fan speed control based on one or more sensors —
