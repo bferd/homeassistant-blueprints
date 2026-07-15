@@ -1,7 +1,6 @@
 # Adaptive Fan Speed Control
-# Version: 1.0.0
-# https://github.com/bferd/homeassistant-blueprints
-
+# Version: 1.1.0
+# https://github.com/bferd/homeassistant-blueprints/tree/main/adaptive_fan_speed_control
 blueprint:
   name: Adaptive Fan Speed Control
   description: "Adaptive fan speed control based on one or more sensors —
@@ -44,7 +43,6 @@ blueprint:
     (anything from the last couple of years should be fine; if the
     device/select inputs fail to render, update Home Assistant Core)."
   domain: automation
-  source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/adaptive_fan_speed_control/adaptive_fan_speed_control.yaml
   input:
     sensor_entities:
       name: 🌡 Sensors or Thermostat(s)
@@ -382,12 +380,39 @@ blueprint:
           step: 1.0
           unit_of_measurement: '%'
     blocker_entity:
-      name: (OPTIONAL) Blocking entity
-      description: If this entity's state is on, it will prevent the automation from running. E.g. sleepmode or away mode.
+      name: 🚫 (OPTIONAL) Blocking entity
+      description: If this entity's state is on, the automation will either
+        pause or shut off the fan depending on the Blocking Entity Action
+        setting below. E.g. a sleep mode, away mode, or quiet time helper.
       default:
       selector:
         entity:
           multiple: false
+    blocker_action:
+      name: 🚫 Blocking Entity Action
+      description: What to do when the blocking entity is on. Pause leaves
+        the fan at its current speed and stops the automation from making
+        any adjustments until the blocker turns off again. Shut off turns
+        the fan off immediately and keeps it off until the blocker turns off.
+        Ignored if no blocking entity is configured. Note — in Shut off mode
+        the fan turns off on the next periodic check (up to 60 seconds
+        depending on Update Check Frequency) rather than the instant the
+        blocker turns on, since the blocker entity itself isn't a trigger by
+        default. For immediate shutoff, add a state trigger on your blocker
+        entity to the Custom Trigger Override input below using the trigger
+        editor — set platform to "state", entity_id to your blocker entity,
+        and "to" to "on". That fires the automation the moment the blocker
+        turns on, which then immediately runs the shutoff logic rather than
+        waiting for the next poll.
+      default: pause
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - value: pause
+              label: Pause (fan stays at current speed, no adjustments)
+            - value: shutoff
+              label: Shut off (fan turns off immediately)
     notify_device:
       name: 📱 (OPTIONAL) Notify Device
       description: Companion app device to notify if the sensor/thermostat
@@ -419,6 +444,30 @@ blueprint:
           filter:
             - domain: input_boolean
           multiple: false
+    ambient_sensor:
+      name: 🌍 (OPTIONAL) Ambient Reference Sensor
+      description: A temperature or humidity sensor representing the ambient
+        conditions that physically limit what the fan can achieve — typically
+        the average temperature or humidity of the home. When set, the
+        effective off threshold for matching sensor types is adjusted so the
+        fan stops trying once it reaches ambient rather than continuing to
+        run toward an unachievable setpoint. For example, if the home average
+        is 26°C and the thermostat targets 22°C, the fan turns off when the
+        room reaches 26°C instead of thrashing trying to push past ambient.
+        The sensor's device_class determines which mode(s) it corrects —
+        temperature corrects Temperature and Thermostat sensors; humidity
+        corrects both Humidity High and Humidity Low sensors. Air quality
+        sensors are not affected. Leave blank to use the configured off
+        thresholds as-is.
+      default:
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: temperature
+            - domain: sensor
+              device_class: humidity
+          multiple: false
 
   source_url: https://community.home-assistant.io/t/adaptive-fan-speed-control-based-on-temperature-and-speed-range/678152
 variables:
@@ -446,9 +495,11 @@ variables:
   max_change: !input max_change
   change_threshold: !input change_threshold
   blocker_entity: !input blocker_entity
+  blocker_action: !input blocker_action
   notify_device: !input notify_device
   notify_state_helper: !input notify_state_helper
   already_notified: "{{ notify_state_helper not in [none, ''] and is_state(notify_state_helper, 'on') }}"
+  ambient_sensor: !input ambient_sensor
   sensor_entities: !input sensor_entities
   fan_speed: '{{ state_attr(fan_switch,''percentage'') | float(0)}}'
   sensor_eval: >-
@@ -457,6 +508,10 @@ variables:
       'nitrogen_dioxide', 'nitrogen_monoxide', 'nitrous_oxide', 'ozone',
       'pm1', 'pm25', 'pm4', 'pm10', 'sulphur_dioxide',
       'volatile_organic_compounds', 'volatile_organic_compounds_parts'] %}
+    {% set use_ambient = ambient_sensor not in [none, ''] and states(ambient_sensor) not in ['unavailable', 'unknown', 'none'] %}
+    {% set ambient_dc = state_attr(ambient_sensor, 'device_class') if use_ambient else '' %}
+    {% set ambient_t = states(ambient_sensor) | float(0) if (use_ambient and ambient_dc == 'temperature') else none %}
+    {% set ambient_h = states(ambient_sensor) | float(0) if (use_ambient and ambient_dc == 'humidity') else none %}
     {% for entity in sensor_entities %}
       {% set is_climate = entity.split('.')[0] == 'climate' %}
       {% set dc = state_attr(entity, 'device_class') %}
@@ -473,21 +528,35 @@ variables:
         {% if is_climate %}
           {% set setpoint = state_attr(entity, 'temperature') | float(0) %}
           {% set actual = state_attr(entity, 'current_temperature') | float(0) %}
-          {% set cur = (setpoint - actual) if states(entity) == 'heat' else (actual - setpoint) %}
+          {% set is_heat = states(entity) == 'heat' %}
+          {% set cur = (setpoint - actual) if is_heat else (actual - setpoint) %}
           {% set emin = deviation_off | float(0) %}
           {% set emax = deviation_amount | float(0) %}
           {% set eoff = deviation_off | float(0) %}
+          {% if ambient_t is not none %}
+            {% if is_heat %}
+              {% set eoff = [eoff, setpoint - ambient_t] | max %}
+            {% else %}
+              {% set eoff = [eoff, ambient_t - setpoint] | max %}
+            {% endif %}
+          {% endif %}
         {% elif is_hum %}
           {% if humidity_direction == 'low' %}
             {% set cur = -1 * (states(entity) | float(0)) %}
             {% set emin = -1 * (max_humidity | float(0)) %}
             {% set emax = -1 * (min_humidity | float(0)) %}
             {% set eoff = -1 * (off_humidity | float(0)) %}
+            {% if ambient_h is not none %}
+              {% set eoff = [eoff, -ambient_h] | max %}
+            {% endif %}
           {% else %}
             {% set cur = states(entity) | float(0) %}
             {% set emin = min_humidity | float(0) %}
             {% set emax = max_humidity | float(0) %}
             {% set eoff = off_humidity | float(0) %}
+            {% if ambient_h is not none %}
+              {% set eoff = [eoff, ambient_h] | max %}
+            {% endif %}
           {% endif %}
         {% elif is_aq %}
           {% set cur = states(entity) | float(0) %}
@@ -499,6 +568,9 @@ variables:
           {% set emin = min_temp | float(0) %}
           {% set emax = max_temp | float(0) %}
           {% set eoff = off_temp | float(0) %}
+          {% if ambient_t is not none %}
+            {% set eoff = [eoff, ambient_t] | max %}
+          {% endif %}
         {% endif %}
         {% set vrange = emax - emin %}
         {% set eslope = ((max_fan_speed | float(0) - min_fan_speed | float(0)) / vrange) if vrange != 0 else 0 %}
@@ -539,11 +611,23 @@ trigger:
 - platform: time_pattern
   id: temp_state_change
   seconds: !input update_frequency
-condition:
-- condition: template
-  alias: Check for blocker entity
-  value_template: '{{ (blocker_entity == none) or (states(blocker_entity) == ''off'')}}'
+condition: []
 action:
+- if:
+  - condition: template
+    alias: Blocker entity is active
+    value_template: "{{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}"
+  then:
+  - if:
+    - condition: template
+      value_template: "{{ blocker_action == 'shutoff' }}"
+    then:
+    - service: homeassistant.turn_off
+      target:
+        entity_id: "{{ fan_switch }}"
+- condition: template
+  alias: Stop here if blocker entity is active — prevents all further logic regardless of mode
+  value_template: "{{ blocker_entity in [none, ''] or is_state(blocker_entity, 'off') }}"
 - if:
   - condition: template
     alias: All previously-down sensors have recovered
@@ -605,8 +689,11 @@ action:
       - condition: template
         value_template: "{{ change_time_enabled and not aq_active }}"
       then:
-      - delay:
+      - wait_template: >-
+          {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
+        timeout:
           seconds: !input change_time
+        continue_on_timeout: true
   - conditions:
     - condition: template
       value_template: '{{states(fan_switch) == ''on''}}'
@@ -627,8 +714,11 @@ action:
       - condition: template
         value_template: "{{ change_time_enabled and not aq_active }}"
       then:
-      - delay:
+      - wait_template: >-
+          {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
+        timeout:
           seconds: !input change_time
+        continue_on_timeout: true
   - conditions:
     - condition: not
       alias: Make sure the fan hasn't just been turned on 
@@ -660,7 +750,10 @@ action:
       - condition: template
         value_template: "{{ change_time_enabled and not aq_active }}"
       then:
-      - delay:
+      - wait_template: >-
+          {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
+        timeout:
           seconds: !input change_time
+        continue_on_timeout: true
 mode: queued
 max: 2
