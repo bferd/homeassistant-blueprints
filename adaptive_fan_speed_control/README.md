@@ -13,7 +13,8 @@ A Home Assistant blueprint that automatically sets fan speed based on one or mor
 - Throttles how often speed changes happen (cooldown delay) and how often sensors are even checked (polling frequency), independent of how often the sensors themselves report updates.
 - Won't drop a manual fan-on event during an active cooldown — it queues and runs once the cooldown clears, rather than being silently discarded.
 - If a sensor becomes unavailable, it's excluded from the calculation rather than treated as a zero — the fan keeps responding to whichever sensors are still healthy, and only freezes at its current speed if every configured sensor goes down at once. An optional companion app notification fires whenever at least one sensor is down (listing which), throttled to once per outage plus a one-time "recovered" notification, if you provide a tracking helper.
-- Supports an optional blocking entity (e.g. sleep mode, away mode) to disable the automation entirely.
+- Supports an optional **Ambient Reference Sensor** (e.g. an outdoor temperature sensor, or a home-average temperature/humidity helper) that caps the effective off threshold to what's physically achievable — so if it's 26°C outside, the fan stops trying to push the room below 26°C rather than running at full speed indefinitely toward an impossible target.
+- Supports an optional blocking entity (e.g. sleep mode, away mode) with a configurable action — **Pause** (fan coasts at current speed, no adjustments) or **Shut off** (fan turns off immediately when the blocker activates).
 - Supports an optional custom trigger input for advanced use — e.g. reacting on every native sensor update instead of polling, or a custom sub-minute polling interval.
 
 ## Multiple sensors
@@ -59,13 +60,36 @@ Deviation Amount is the deviation (in either direction) that maps to maximum fan
 
 **Single-setpoint thermostats only.** This relies on the climate entity's `temperature` attribute (a single target). Dual-setpoint thermostats — anything using separate `target_temp_high`/`target_temp_low` instead, typically in a Heat/Cool or Auto mode — don't expose that attribute, so the setpoint value comes back empty. That failure mode is handled gracefully: the same unavailability check used for a missing/unknown sensor also checks whether the thermostat's `temperature` or `current_temperature` attributes are `None`. If either is missing, that entity is excluded from the calculation exactly like an unavailable sensor — leaving the rest of the configured sensors (if any) to drive the fan — rather than computing a deviation against a missing setpoint.
 
+## Ambient Reference Sensor
+
+The Ambient Reference Sensor input accepts an optional single temperature or humidity sensor that represents the ambient conditions physically limiting what the fan can achieve. When set, the effective off threshold for matching sensor types is adjusted so the fan stops trying once the room reaches ambient, rather than continuing to run toward a setpoint that ambient conditions make impossible.
+
+**Temperature / Thermostat** — the most natural use case is an outdoor temperature sensor for a fan pulling in fresh air from outside. If it's 28°C outside, no amount of fan speed will cool a room below 28°C, so the fan turns off when the room reaches 28°C rather than thrashing at 100% indefinitely. A home-average temperature helper (HA's "Combine the state of several sensors" group helper, set to arithmetic mean) works the same way as an indoor ambient reference.
+
+**Humidity** — same idea. If home average humidity is 60%, a bathroom exhaust fan can't reduce the bathroom below 60% no matter how hard it runs. Set the home average humidity helper as the ambient reference and the fan turns off once the bathroom reaches 60%.
+
+The direction is handled automatically per mode:
+- Temperature sensors and Thermostat Cool mode: `effective_off = max(configured_off, ambient)` — fan stops when room reaches the higher of the two
+- Thermostat Heat mode: `effective_off = max(configured_off, setpoint − ambient)` in deviation space — fan stops when the room reaches ambient from below
+- Humidity High mode: `effective_off = max(configured_off, ambient)` — same as temperature
+- Humidity Low mode: inverted automatically via the existing sign-flip — fan stops when room rises to ambient from below
+
+If the ambient sensor goes unavailable, the correction silently disables itself and the automation falls back to the configured off thresholds as-is. Air quality sensors are not affected — there's no meaningful physical ceiling for an air quality reading in the same sense.
+
+## Blocking entity
+
+The blocking entity input disables the automation when the entity is `on`. Two modes are available via the Blocking Entity Action input:
+
+- **Pause** — the automation stops making adjustments. The fan stays at whatever speed it was running when the blocker activated.
+- **Shut off** — the fan turns off immediately when the blocker activates and stays off until it deactivates.
+
+In Shut off mode, the fan turns off on the next periodic check cycle rather than instantly, since the blocker entity isn't a trigger by default. For an immediate response (e.g. you want the fan off the moment Quiet Time turns on at midnight), add a state trigger on your blocker entity to the Custom Trigger Override input — set platform to **state**, entity to your blocker entity, and **to** to `on`. That fires the automation the instant the blocker activates, which immediately hits the shutoff branch.
+
 ## Installation
 
 1. Settings → Automations & Scenes → Blueprints → Import Blueprint
-2. Paste the raw URL to `adaptive_fan_speed_control.yaml` in this repo
-3. Create a new automation from the blueprint and fill in your fan, temperature sensor or thermostat, and preferences
-
-Note: while this repo is private, the "Open your Home Assistant instance" import button won't work for anyone but you (GitHub raw URLs require auth for private repos). For testing on your own instance, either copy the file directly into `/config/blueprints/automation/<folder>/` and reload blueprints, temporarily make the repo public, or push to a secret Gist instead (its raw URL is fetchable without auth, but isn't indexed/discoverable).
+2. Paste the raw URL to `adaptive_fan_speed_control.yaml` in this repo, or use the import button at the top of the [community forum post](https://community.home-assistant.io/t/adaptive-fan-speed-control-based-on-temperature-and-speed-range/678152)
+3. Create a new automation from the blueprint and fill in your fan, sensors or thermostat, and preferences
 
 ## Configuration
 
@@ -89,7 +113,9 @@ Note: while this repo is private, the "Open your Home Assistant instance" import
 | Change frequency delay | Minimum time between actual speed adjustments, in seconds (30 to 1200, with the minute equivalent shown in each dropdown option) |
 | Enable Change Frequency Delay | Toggle the above cooldown on or off. Turn off temporarily while testing — manually nudging a thermostat and watching the fan respond every check — since the cooldown otherwise sleeps through several checks at once, which can make speed changes appear to skip straight to a much later value instead of stepping through the ramp. |
 | Minimum / Maximum percentage change | Bounds on how much the fan speed can change per adjustment |
-| Blocking entity (optional) | If this entity is "on", the automation won't run |
+| Blocking entity (optional) | If this entity is "on", the automation pauses or shuts off the fan depending on Blocking Entity Action |
+| Blocking Entity Action | What to do when the blocker is active — Pause (fan coasts) or Shut off (fan turns off). For instant shutoff, also add a state trigger on the blocker to Custom Trigger Override — see "Blocking entity" above. |
+| Ambient Reference Sensor (optional) | A temperature or humidity sensor representing ambient conditions (e.g. outdoor temp, home average humidity) — caps the effective off threshold so the fan stops trying once it reaches ambient. See "Ambient Reference Sensor" above. |
 | Notify Device (optional) | Companion app device to notify if the sensor/thermostat becomes unavailable or unreadable |
 | Notify State Helper (optional) | An `input_boolean` you create — tracks notification state so the unavailable notification fires once per outage instead of every check, and enables a one-time "recovered" notification. Leave blank for the old every-check behavior with no recovery notification. |
 
@@ -102,6 +128,13 @@ Note: while this repo is private, the "Open your Home Assistant instance" import
 - Threshold sliders are shared per detected type, not per sensor instance — two sensors of the same type in the list (e.g. two humidity sensors) can't have independently configured thresholds. See "Multiple sensors" above.
 - Mode detection happens via each sensor's `device_class` attribute, and there's no way to surface "this is the mode I detected for each one" inside the blueprint's own configuration form — blueprint inputs are static and can't be templated against another input's current value, confirmed against HA's own blueprint schema docs (and there's an open, unimplemented feature request for exactly this on HA's GitHub). If you want confirmation of which mode got picked per entity, that only becomes visible after the automation is saved and has run at least once — e.g. via its trace, not during setup.
 - Requires a reasonably recent Home Assistant Core release for the `select`/`device`/`entity` selector filter syntax used in the inputs.
+
+## Changelog
+
+| Version | Changes |
+|---|---|
+| v1.1.0 | Added Ambient Reference Sensor (outdoor temp / home average) to cap the effective off threshold at what's physically achievable. Added Blocking Entity Action toggle (Pause vs Shut off). Cooldown delay now uses `wait_template` instead of `delay` so it exits immediately if the blocker activates mid-wait, enabling near-instant fan shutoff when combined with a Custom Trigger Override on the blocker entity. |
+| v1.0.0 | Initial release — multi-sensor support, Temperature / Humidity / Air Quality / Thermostat modes, max-wins combination, AQ cooldown bypass, partial sensor degradation, notification throttle with recovery notification, change frequency delay toggle. |
 
 ## Credits
 
