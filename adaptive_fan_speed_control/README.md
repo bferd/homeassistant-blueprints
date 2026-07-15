@@ -88,7 +88,7 @@ In Shut off mode, the fan turns off on the next periodic check cycle rather than
 ## Installation
 
 1. Settings → Automations & Scenes → Blueprints → Import Blueprint
-2. Paste the raw URL to `adaptive_fan_speed_control.yaml` in this repo, or use the import button at the top of the [community forum post](https://community.home-assistant.io/t/adaptive-fan-speed-control-based-on-temperature-and-speed-range/678152)
+2. Paste the raw URL to `adaptive_fan_speed_control.yaml` in this repo, or use the import button at the top of the [community forum post](https://community.home-assistant.io/t/adaptive-fan-speed-control/1014995)
 3. Create a new automation from the blueprint and fill in your fan, sensors or thermostat, and preferences
 
 ## Configuration
