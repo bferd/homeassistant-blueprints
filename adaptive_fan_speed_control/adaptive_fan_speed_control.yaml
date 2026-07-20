@@ -1,5 +1,5 @@
 # Adaptive Fan Speed Control
-# Version: 1.1.0
+# Version: 1.2.0
 # https://github.com/bferd/homeassistant-blueprints/tree/main/adaptive_fan_speed_control
 blueprint:
   name: Adaptive Fan Speed Control
@@ -281,13 +281,14 @@ blueprint:
       selector:
         boolean: {}
     update_frequency:
-      name: 🔁 Update Check Frequency
-      description: How often to re-check the temperature and consider a fan speed adjustment. 
-        This is independent of how often your temperature sensor itself reports updates — 
-        if your sensor updates every few seconds, this keeps the automation from triggering 
-        that often. Lower values react faster but trigger the automation more; higher values 
-        reduce automation triggers and log noise. For reacting on every native sensor update
-        instead of polling, use the Custom Trigger Override input below.
+      name: 🔁 Update Check Frequency / Cooldown
+      description: How often to re-check sensors and consider a fan speed
+        adjustment — this also serves as the cooldown between adjustments,
+        so the two are always in sync and the automation never queues more
+        triggers than it can handle. Lower values react faster; higher values
+        reduce log noise and automation load. For reacting on every native
+        sensor update instead of polling, use the Custom Trigger Override
+        input below.
       default: "0"
       selector:
         select:
@@ -314,44 +315,15 @@ blueprint:
       default: []
       selector:
         trigger: {}
-    change_time:
-      name: ⏱️ Change frequency delay
-      description: How long to delay between potential speed adjustments, in
-        seconds (minute equivalent shown in each option). This is the
-        cooldown — see "Enable Change Frequency Delay" below to disable it
-        entirely.
-      default: "60"
-      selector:
-        select:
-          mode: dropdown
-          options:
-            - value: "30"
-              label: 30 seconds (0.5 min)
-            - value: "60"
-              label: 60 seconds (1 min)
-            - value: "120"
-              label: 120 seconds (2 min)
-            - value: "240"
-              label: 240 seconds (4 min)
-            - value: "480"
-              label: 480 seconds (8 min)
-            - value: "960"
-              label: 960 seconds (16 min)
-            - value: "1200"
-              label: 1200 seconds (20 min)
     change_time_enabled:
-      name: ⏱️ Enable Change Frequency Delay
-      description: Toggle the cooldown delay above on or off. Leave this on
-        for normal unattended operation — it exists specifically to stop
-        the fan from making frequent, jittery speed changes. Turn it off
-        temporarily while testing (e.g. manually nudging a thermostat and
-        watching the fan respond on every single check), since the cooldown
-        otherwise sleeps through several check cycles in a row, which can
-        make speed changes appear to skip straight to a much later value
-        instead of stepping through the ramp. Note this only affects
-        non-air-quality sensors — any configured air quality sensor that's
-        currently active always bypasses the cooldown regardless of this
-        toggle, so it can respond on every check.
+      name: ⏱️ Enable Cooldown
+      description: Toggle the cooldown on or off. The cooldown matches the
+        Update Check Frequency above — so if you're polling every 30 seconds,
+        adjustments are also throttled to at most once every 30 seconds. Turn
+        this off temporarily while testing (e.g. manually nudging a thermostat
+        setpoint to watch the fan step through the ramp on every check). Note
+        this only affects non-air-quality sensors — any active air quality
+        sensor always bypasses the cooldown regardless of this toggle.
       default: true
       selector:
         boolean: {}
@@ -490,8 +462,8 @@ variables:
   deviation_amount: !input deviation_amount
   deviation_off: !input deviation_off
 
-  change_time: !input change_time
   change_time_enabled: !input change_time_enabled
+  check_interval_seconds: "{{ update_frequency.lstrip('/') | int if update_frequency != '0' else 60 }}"
   max_change: !input max_change
   change_threshold: !input change_threshold
   blocker_entity: !input blocker_entity
@@ -692,7 +664,7 @@ action:
       - wait_template: >-
           {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
         timeout:
-          seconds: !input change_time
+          seconds: "{{ check_interval_seconds }}"
         continue_on_timeout: true
   - conditions:
     - condition: template
@@ -717,7 +689,7 @@ action:
       - wait_template: >-
           {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
         timeout:
-          seconds: !input change_time
+          seconds: "{{ check_interval_seconds }}"
         continue_on_timeout: true
   - conditions:
     - condition: not
@@ -753,7 +725,7 @@ action:
       - wait_template: >-
           {{ blocker_entity not in [none, ''] and is_state(blocker_entity, 'on') }}
         timeout:
-          seconds: !input change_time
+          seconds: "{{ check_interval_seconds }}"
         continue_on_timeout: true
 mode: queued
 max: 2
