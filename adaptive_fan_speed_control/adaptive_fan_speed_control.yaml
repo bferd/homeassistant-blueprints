@@ -463,6 +463,7 @@ variables:
   deviation_off: !input deviation_off
 
   change_time_enabled: !input change_time_enabled
+  update_frequency: !input update_frequency
   check_interval_seconds: "{{ update_frequency.lstrip('/') | int if update_frequency != '0' else 60 }}"
   max_change: !input max_change
   change_threshold: !input change_threshold
