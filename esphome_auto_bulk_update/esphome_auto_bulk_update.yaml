@@ -17,7 +17,7 @@ blueprint:
     8. Sends a completion notification listing updated devices.
     9. Waits out the cooldown period before the automation can trigger again.
   domain: automation
-  source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/esphome_auto_bulk_update/esphome_auto_bulk_update.yaml
+  source_url: https://github.com/bferd/homeassistant-blueprints/blob/main/esphome_auto_bulk_update.yaml
   input:
     update_threshold:
       name: Device Update Threshold
@@ -29,6 +29,19 @@ blueprint:
           max: 20
           step: 1
           mode: slider
+    update_detection_delay:
+      name: Update Detection Delay
+      description: >
+        How long to wait after the first device needs an update before triggering.
+        Increase this if not all devices are being detected on trigger.
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          mode: slider
+          unit_of_measurement: minutes
     update_delay:
       name: Delay Before Updating
       description: How many minutes to wait before pushing updates.
@@ -84,15 +97,23 @@ blueprint:
               value: "sequential"
     sequential_delay:
       name: Delay Between Sequential Updates
-      description: Minutes to wait between each device when using sequential mode.
-      default: 5
+      description: How long to wait between each device when using sequential mode.
+      default: "0"
       selector:
-        number:
-          min: 1
-          max: 10
-          step: 1
-          mode: slider
-          unit_of_measurement: minutes
+        select:
+          options:
+            - label: "No delay"
+              value: "0"
+            - label: "10 seconds"
+              value: "10"
+            - label: "30 seconds"
+              value: "30"
+            - label: "1 minute"
+              value: "60"
+            - label: "2 minutes"
+              value: "120"
+            - label: "6 minutes"
+              value: "360"
 
 variables:
   update_threshold: !input update_threshold
@@ -123,6 +144,8 @@ trigger:
          | selectattr("entity_id", "contains", "update")
          | selectattr("state", "eq", "on")
          | list | count > 0 }}
+    for:
+      minutes: !input update_detection_delay
   - platform: time
     at: !input time_window_start
 
@@ -194,7 +217,7 @@ action:
                   target:
                     entity_id: "{{ repeat.item }}"
                 - delay:
-                    minutes: "{{ 0 if repeat.last else sequential_delay }}"
+                    seconds: "{{ 0 if repeat.last else sequential_delay | int }}"
         else:
           - action: update.install
             continue_on_error: true
