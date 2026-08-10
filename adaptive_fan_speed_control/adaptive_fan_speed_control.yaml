@@ -1,5 +1,5 @@
 # Adaptive Fan Speed Control
-# Version: 1.2.0
+# Version: 1.2.1
 # https://github.com/bferd/homeassistant-blueprints/tree/main/adaptive_fan_speed_control
 blueprint:
   name: Adaptive Fan Speed Control
@@ -491,7 +491,7 @@ variables:
       {% set is_hum = dc == 'humidity' %}
       {% set is_aq = dc in aq_classes %}
       {% if is_climate %}
-        {% set unavail = states(entity) in ['unavailable', 'unknown', 'none'] or state_attr(entity, 'current_temperature') is none or state_attr(entity, 'temperature') is none %}
+        {% set unavail = states(entity) in ['unavailable', 'unknown', 'none', 'off'] or state_attr(entity, 'current_temperature') is none or state_attr(entity, 'temperature') is none %}
       {% else %}
         {% set unavail = states(entity) in ['unavailable', 'unknown', 'none'] %}
       {% endif %}
