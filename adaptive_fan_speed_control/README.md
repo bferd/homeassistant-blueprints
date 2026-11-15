@@ -23,7 +23,7 @@ The Sensors or Thermostat(s) input accepts any number of `sensor.*` and `climate
 
 The fan only turns off once *every* configured entity's own off-threshold check agrees it's satisfied. If even one of them still wants the fan on, it stays on at whatever speed the highest-demanding entity currently computes.
 
-Air quality sensors get one more behavioral difference: any configured air quality sensor that's currently active (above its own off threshold) makes the *entire* automation bypass the Change frequency delay cooldown for that check, regardless of the Enable Change Frequency Delay toggle. The reasoning: the cooldown exists to stop comfort-oriented sensors (temperature, humidity) from making jittery, frequent adjustments, which is fine since comfort drift is slow. Air quality can spike fast, and you don't want it stuck waiting out a cooldown that a different sensor's prior adjustment started. Pair this with a fast Update Check Frequency if air quality response time matters to you — the cooldown bypass only helps if the periodic check itself is also running often.
+Air quality sensors get one more behavioral difference: any configured air quality sensor that's currently active (above its own off threshold) makes the *entire* automation bypass the cooldown for that check, regardless of the Enable Cooldown toggle. The reasoning: the cooldown exists to stop comfort-oriented sensors (temperature, humidity) from making jittery, frequent adjustments, which is fine since comfort drift is slow. Air quality can spike fast, and you don't want it stuck waiting out a cooldown that a different sensor's prior adjustment started. Pair this with a fast Update Check Frequency if air quality response time matters to you — the cooldown bypass only helps if the periodic check itself is also running often.
 
 **Limitation:** since mode detection and threshold sliders are per *type*, not per sensor instance, two sensors of the same type (e.g. two separate humidity sensors) share one set of threshold sliders rather than getting independently configurable ones. This covers combining *different* kinds of sensor in one room (a thermostat plus an air quality sensor, or temperature plus humidity) but not "two humidity sensors with two different setpoints" — that would need a much larger redesign (effectively a separate threshold system per sensor slot), which isn't what this blueprint does.
 
@@ -31,7 +31,7 @@ Air quality sensors get one more behavioral difference: any configured air quali
 
 ## Detected modes
 
-Which mode applies to a given entity — and which threshold inputs actually do anything for it — is auto-detected per entity, not a separate input you set: **all four modes' inputs are always shown in the UI; blueprints can't conditionally hide one based on another input's value**, so whichever sets don't apply to a particular entity just get ignored for that entity.
+Which mode applies to a given entity, and which threshold inputs actually do anything for it, is auto-detected per entity, not a separate input you set. Blueprints can't conditionally hide or disable inputs, so each mode's thresholds live in their own collapsed section (Temperature, Thermostats, Humidity, Air Quality). Only open the sections for the sensor types you use. Inputs in sections that don't apply to an entity are ignored for it.
 
 - **Climate entity selected → Thermostat Mode.** Deviation Amount and Deviation Off are used, as degrees of deviation from the thermostat's setpoint.
 - **Sensor with `device_class: humidity` → Humidity Mode.** Maximum/Minimum/Off Humidity are used, plus the Humidity Direction selector (High or Low — see below).
@@ -93,46 +93,91 @@ In Shut off mode, the fan turns off on the next periodic check cycle rather than
 
 ## Configuration
 
+Inputs are grouped into sections in the blueprint UI. Basic Setup is open by default and the rest start collapsed.
+
+### Basic Setup
+
 | Input | Description |
 |---|---|
-| Sensors or Thermostat(s) | One or more `sensor.*` (temperature, humidity, or air quality) and/or single-setpoint `climate.*` entities. Mode is auto-detected per entity — see "Detected modes" above. Combined via max-wins — see "Multiple sensors" above. |
+| Sensors or Thermostat(s) | One or more `sensor.*` (temperature, humidity, or air quality) and/or single-setpoint `climate.*` entities. Mode is auto-detected per entity, see "Detected modes" above. Combined via max-wins, see "Multiple sensors" above. |
 | Fan | The fan entity to control |
 | Minimum / Maximum Fan Speed | The speed range the fan will be set to |
-| Minimum / Maximum Temperature | Temperature Mode only — absolute degrees used to map to fan speed. Ignored otherwise. |
-| Off Temperature | Temperature Mode only — below this, the fan turns off (and optionally back on above it). Ignored otherwise. |
-| Humidity Direction | Humidity Mode only — High (more fan as humidity rises) or Low (more fan as humidity falls). Ignored otherwise. |
-| Minimum / Maximum Humidity | Humidity Mode only — which end maps to which fan speed depends on Humidity Direction. Ignored otherwise. |
-| Off Humidity | Humidity Mode only — below Minimum in High Mode, above Maximum in Low Mode. Ignored otherwise. |
-| Minimum / Maximum Air Quality | Air Quality Mode only — reading mapped to fan speed, in whatever unit your sensor reports. Ignored otherwise. |
-| Off Air Quality | Air Quality Mode only — below this, the fan turns off. Ignored otherwise. |
-| Deviation Amount | Thermostat Mode only — degrees of deviation from setpoint that maps to maximum fan speed. Ignored otherwise. |
-| Deviation Off | Thermostat Mode only — degrees of deviation below which the fan turns off; also the floor of the ramp range. Ignored otherwise. Must be smaller than Deviation Amount. |
+
+### Temperature Sensors
+
+| Input | Description |
+|---|---|
+| Minimum / Maximum Temperature | Absolute degrees used to map to fan speed. Use the same unit as the sensor. |
+| Off Temperature | At or below this, the fan turns off (and optionally back on above it) |
+
+### Thermostats
+
+| Input | Description |
+|---|---|
+| Deviation Amount | Degrees of deviation from setpoint that maps to maximum fan speed |
+| Deviation Off | Degrees of deviation below which the fan turns off. Also the floor of the ramp range. Must be smaller than Deviation Amount. |
+
+### Humidity Sensors
+
+| Input | Description |
+|---|---|
+| Humidity Direction | High (more fan as humidity rises) or Low (more fan as humidity falls) |
+| Minimum / Maximum Humidity | Which end maps to which fan speed depends on Humidity Direction |
+| Off Humidity | Below Minimum in High Mode, above Maximum in Low Mode |
+
+### Air Quality Sensors
+
+| Input | Description |
+|---|---|
+| Minimum / Maximum Air Quality | Reading mapped to fan speed, in whatever unit your sensor reports |
+| Off Air Quality | Below this, the fan turns off |
+
+### Timing and Behavior
+
+| Input | Description |
+|---|---|
 | Enable auto fan on | Whether the fan turns back on automatically once it crosses back above the off threshold |
-| Update Check Frequency | How often to re-check and consider an adjustment (5–60 seconds) |
-| Custom Trigger Override (optional) | Add your own trigger(s) — e.g. a state trigger on the sensor for every-update reactivity, or a custom sub-minute time pattern |
-| Change frequency delay | Minimum time between actual speed adjustments, in seconds (30 to 1200, with the minute equivalent shown in each dropdown option) |
-| Enable Change Frequency Delay | Toggle the above cooldown on or off. Turn off temporarily while testing — manually nudging a thermostat and watching the fan respond every check — since the cooldown otherwise sleeps through several checks at once, which can make speed changes appear to skip straight to a much later value instead of stepping through the ramp. |
-| Minimum / Maximum percentage change | Bounds on how much the fan speed can change per adjustment |
+| Update Check Frequency / Cooldown | How often sensors are re-checked (5 to 60 seconds). Also the cooldown between speed adjustments. |
+| Custom Trigger Override (optional) | Add your own trigger(s), e.g. a state trigger on the sensor for every-update reactivity. Adds to the periodic check, does not replace it. |
+| Enable Cooldown | Throttle speed changes to the Update Check Frequency. Turn off temporarily while testing, since the cooldown otherwise sleeps through several checks at once, which can make speed changes appear to skip straight to a much later value instead of stepping through the ramp. Air quality sensors always bypass it. |
+| Minimum percentage change | Smallest change between current and target speed worth applying |
+| Maximum percentage change | Largest speed change allowed per adjustment |
+
+### Blocking Entity
+
+| Input | Description |
+|---|---|
 | Blocking entity (optional) | If this entity is "on", the automation pauses or shuts off the fan depending on Blocking Entity Action |
-| Blocking Entity Action | What to do when the blocker is active — Pause (fan coasts) or Shut off (fan turns off). For instant shutoff, also add a state trigger on the blocker to Custom Trigger Override — see "Blocking entity" above. |
-| Ambient Reference Sensor (optional) | A temperature or humidity sensor representing ambient conditions (e.g. outdoor temp, home average humidity) — caps the effective off threshold so the fan stops trying once it reaches ambient. See "Ambient Reference Sensor" above. |
-| Notify Device (optional) | Companion app device to notify if the sensor/thermostat becomes unavailable or unreadable |
-| Notify State Helper (optional) | An `input_boolean` you create — tracks notification state so the unavailable notification fires once per outage instead of every check, and enables a one-time "recovered" notification. Leave blank for the old every-check behavior with no recovery notification. |
+| Blocking Entity Action | Pause (fan coasts) or Shut off (fan turns off). For instant shutoff, also add a state trigger on the blocker to Custom Trigger Override, see "Blocking entity" above. |
+
+### Notifications
+
+| Input | Description |
+|---|---|
+| Notify Device (optional) | Companion app device to notify if a sensor/thermostat becomes unavailable or unreadable |
+| Notify State Helper (optional) | An `input_boolean` you create. Tracks notification state so the unavailable notification fires once per outage instead of every check, and enables a one-time "recovered" notification. Leave blank for the old every-check behavior with no recovery notification. |
+
+### Ambient Reference
+
+| Input | Description |
+|---|---|
+| Ambient Reference Sensor (optional) | A temperature or humidity sensor representing ambient conditions (e.g. outdoor temp, home average humidity). Caps the effective off threshold so the fan stops trying once it reaches ambient. See "Ambient Reference Sensor" above. |
 
 ## Known limitations
 
 - The Custom Trigger Override is additive, not exclusive — anything added there runs alongside the periodic check, not instead of it. Blueprints can't conditionally disable one static trigger based on another input's value.
 - Dual-setpoint thermostats (separate heat/cool targets) aren't supported when a thermostat is selected — see "Thermostat mode mechanics" above for what happens instead.
 - Mode is `queued` with a max of 2 (current run + 1 queued) rather than unbounded, so a very fast custom override trigger combined with a long cooldown can't build an unbounded backlog — excess trigger events beyond that are dropped (logged as a warning) rather than queued indefinitely.
-- All four modes' input sets always show in the UI regardless of which entities are selected, since blueprints can't conditionally hide inputs.
+- Blueprints can't conditionally hide or disable inputs based on which entities are selected, so each mode's inputs are grouped into collapsed sections instead.
 - Threshold sliders are shared per detected type, not per sensor instance — two sensors of the same type in the list (e.g. two humidity sensors) can't have independently configured thresholds. See "Multiple sensors" above.
 - Mode detection happens via each sensor's `device_class` attribute, and there's no way to surface "this is the mode I detected for each one" inside the blueprint's own configuration form — blueprint inputs are static and can't be templated against another input's current value, confirmed against HA's own blueprint schema docs (and there's an open, unimplemented feature request for exactly this on HA's GitHub). If you want confirmation of which mode got picked per entity, that only becomes visible after the automation is saved and has run at least once — e.g. via its trace, not during setup.
-- Requires a reasonably recent Home Assistant Core release for the `select`/`device`/`entity` selector filter syntax used in the inputs.
+- Requires Home Assistant 2024.6 or newer for collapsible input sections, plus a reasonably recent release for the `select`/`device`/`entity` selector filter syntax used in the inputs.
 
 ## Changelog
 
 | Version | Changes |
 |---|---|
+| v1.3.0 | Inputs regrouped into collapsible sections (Basic Setup, Temperature, Thermostats, Humidity, Air Quality, Timing and Behavior, Blocking Entity, Notifications, Ambient Reference) so unused sensor types can stay collapsed. Descriptions shortened. Input names and automation logic unchanged, so existing automations keep their saved values. Requires Home Assistant 2024.6 or newer. |
 | v1.1.0 | Added Ambient Reference Sensor (outdoor temp / home average) to cap the effective off threshold at what's physically achievable. Added Blocking Entity Action toggle (Pause vs Shut off). Cooldown delay now uses `wait_template` instead of `delay` so it exits immediately if the blocker activates mid-wait, enabling near-instant fan shutoff when combined with a Custom Trigger Override on the blocker entity. |
 | v1.0.0 | Initial release — multi-sensor support, Temperature / Humidity / Air Quality / Thermostat modes, max-wins combination, AQ cooldown bypass, partial sensor degradation, notification throttle with recovery notification, change frequency delay toggle. |
 
@@ -152,5 +197,3 @@ All credit for the original concept and groundwork goes to the above. Bugs intro
 If this project saved you some time or you just want to say thanks, a coffee is always appreciated!
  
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-%23FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/schrothdotca)
-
-
